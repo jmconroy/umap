@@ -179,7 +179,7 @@ def multi_component_layout(
     embedding: array of shape (n_samples, dim)
         The initial embedding of ``graph``.
     """
-
+    print('USING multi_component_layout:%d components'%(n_components))
     result = np.empty((graph.shape[0], dim), dtype=np.float32)
 
     if n_components > 2 * dim:
@@ -220,28 +220,28 @@ def multi_component_layout(
         # D = scipy.sparse.spdiags(diag_data, 0, graph.shape[0], graph.shape[0])
         # L = D - graph
         # Normalized Laplacian
-        I = scipy.sparse.identity(component_graph.shape[0], dtype=np.float64)
+        #I = scipy.sparse.identity(component_graph.shape[0], dtype=np.float64)
         D = scipy.sparse.spdiags(
             1.0 / np.sqrt(diag_data),
             0,
             component_graph.shape[0],
             component_graph.shape[0],
         )
-        L = I - D * component_graph * D
-
+        #L = I - D * component_graph * D
+        # Reduced Adjacency Matrix
+        A = D*component_graph*D
         k = dim + 1
         num_lanczos_vectors = max(2 * k + 1, int(np.sqrt(component_graph.shape[0])))
         try:
             eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(
-                L,
+                A,
                 k,
-                which="SM",
+                which="LM",
                 ncv=num_lanczos_vectors,
                 tol=1e-4,
-                v0=np.ones(L.shape[0]),
-                maxiter=graph.shape[0] * 5,
+                v0=np.sqrt(diag_data.T),
             )
-            order = np.argsort(eigenvalues)[1:k]
+            order = np.argsort(1.0-eigenvalues)[1:k]
             component_embedding = eigenvectors[:, order]
             expansion = data_range / np.max(np.abs(component_embedding))
             component_embedding *= expansion
@@ -291,9 +291,7 @@ def spectral_layout(data, graph, dim, random_state, metric="euclidean", metric_k
     embedding: array of shape (n_vertices, dim)
         The spectral embedding of the graph.
     """
-    n_samples = graph.shape[0]
     n_components, labels = scipy.sparse.csgraph.connected_components(graph)
-
     if n_components > 1:
         return multi_component_layout(
             data,
@@ -305,36 +303,58 @@ def spectral_layout(data, graph, dim, random_state, metric="euclidean", metric_k
             metric=metric,
             metric_kwds=metric_kwds,
         )
+    print('USING spectral_layout')
 
     diag_data = np.asarray(graph.sum(axis=0))
     # standard Laplacian
     # D = scipy.sparse.spdiags(diag_data, 0, graph.shape[0], graph.shape[0])
     # L = D - graph
-    # Normalized Laplacian
-    I = scipy.sparse.identity(graph.shape[0], dtype=np.float64)
     D = scipy.sparse.spdiags(
         1.0 / np.sqrt(diag_data), 0, graph.shape[0], graph.shape[0]
     )
-    L = I - D * graph * D
-
+    OLD = True
+    if OLD:
+        #Normalized Laplacian
+        I = scipy.sparse.identity(graph.shape[0], dtype=np.float64)
+        L = I - D * graph * D
+    else:
+        # Reduced Adjacency Matrix
+        A = D*graph*D
     k = dim + 1
     num_lanczos_vectors = max(2 * k + 1, int(np.sqrt(graph.shape[0])))
+    import time
+    t0 = time.clock()
     try:
-        if L.shape[0] < 2000000:
-            eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(
-                L,
-                k,
-                which="SM",
-                ncv=num_lanczos_vectors,
-                tol=1e-4,
-                v0=np.ones(L.shape[0]),
-                maxiter=graph.shape[0] * 5,
-            )
+        if OLD:
+            if L.shape[0] < 2000000:
+                eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(
+                    L,
+                    k,
+                    which="SM",
+                    ncv=num_lanczos_vectors,
+                    tol=1e-4,
+                    v0=np.ones(L.shape[0]),
+                    maxiter=graph.shape[0] * 5,
+                )
+            else:
+                eigenvalues, eigenvectors = scipy.sparse.linalg.lobpcg(
+                    L, random_state.normal(size=(L.shape[0], k)), largest=False, tol=1e-8
+                )
         else:
-            eigenvalues, eigenvectors = scipy.sparse.linalg.lobpcg(
-                L, random_state.normal(size=(L.shape[0], k)), largest=False, tol=1e-8
-            )
-        order = np.argsort(eigenvalues)[1:k]
+            eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(
+                    A,
+                    k,
+                    which="LM",
+                    ncv=num_lanczos_vectors,
+                    tol=1e-8,
+                    v0=np.sqrt(diag_data.T),
+                )
+        order = np.argsort(1.0-eigenvalues)[1:k]
+        t1 = time.clock()
+        if OLD:
+            print('ORG init time: %f'%(t1-t0))
+        else:
+            print('NEW init time: %f'%(t1-t0))
         return eigenvectors[:, order]
     except scipy.sparse.linalg.ArpackError:
         warn(
