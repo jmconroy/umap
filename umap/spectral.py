@@ -353,10 +353,10 @@ def spectral_layout(data, graph, dim, random_state,
                     k,
                     which="LM",
                     ncv=num_lanczos_vectors,
-                    tol=1e-8,
+                    tol=1e-4,
                     v0=np.sqrt(diag_data.T),
                 )
-        order = np.argsort(1.0-eigenvalues)[1:k]
+        order = np.argsort(1.0-np.abs(eigenvalues))[1:k]
         t1 = time.clock()        
         print('%s init time: %f'%(matrix,t1-t0))
         return eigenvectors[:, order]
