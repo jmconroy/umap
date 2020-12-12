@@ -22,11 +22,12 @@ from sklearn.cluster import KMeans
 
 
 
-def run_umap_text_example(dataset,n_components=2):
+def run_umap_text_example(dataset,n_components=2,init='spectral'):
     tfidf_vectorizer = TfidfVectorizer(min_df=5, stop_words='english')
     tfidf_word_doc_matrix = tfidf_vectorizer.fit_transform(dataset.data)
     t0 = time.process_time()
-    tfidf_embedding = umap.UMAP(metric='hellinger',n_components=n_components).fit(tfidf_word_doc_matrix)
+    tfidf_embedding = umap.UMAP(metric='hellinger',n_components=n_components,
+                                init=init).fit(tfidf_word_doc_matrix)
     t1 = time.process_time()
     print('Elapsed time for umap %d embedding = %f'%(n_components,t1-t0))
     category_labels = [dataset.target_names[x] for x in dataset.target]
@@ -40,13 +41,19 @@ def run_umap_text_example(dataset,n_components=2):
 dataset = fetch_20newsgroups(subset='all',
                              shuffle=True, random_state=42)
 
-for n in [2,10,100,200]:
-    tfidf_embedding,cats=run_umap_text_example(dataset,n_components=n)
-    clusterer = KMeans(n_clusters=20)
-    E=tfidf_embedding.embedding_
-    cats_hat = clusterer.fit(E).labels_
-    ari=adjusted_rand_score(cats_hat,cats)
-    print('ARI=%f'%(ari))
+
+
+inits =['spectral_scaled_adjacency', 'spectral_normalized_Laplacian','spectral_adjacency']
+
+for init in inits:
+    for n in [2,10,100,200]:
+        tfidf_embedding,cats=run_umap_text_example(dataset,n_components=n,
+                                                   init=init)
+        clusterer = KMeans(n_clusters=20)
+        E=tfidf_embedding.embedding_
+        cats_hat = clusterer.fit(E).labels_
+        ari=adjusted_rand_score(cats_hat,cats)
+        print('ARI=%f'%(ari))
 
 
 # OLD
