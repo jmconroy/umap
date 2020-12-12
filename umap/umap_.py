@@ -1028,13 +1028,19 @@ def simplicial_set_embedding(
         embedding = random_state.uniform(
             low=-10.0, high=10.0, size=(graph.shape[0], n_components)
         ).astype(np.float32)
-    elif isinstance(init, str) and init == "spectral":
+    elif isinstance(init, str) and init[:8] == "spectral":
         # We add a little noise to avoid local minima for optimization to come
+        matrix=init.split('_')
+        if len(matrix) == 1:
+            matrix = 'normalized_Laplacian'
+        else:
+            matrix = '_'.join(matrix[1:])           
         initialisation = spectral_layout(
             data,
             graph,
             n_components,
             random_state,
+            matrix = matrix,
             metric=metric,
             metric_kwds=metric_kwds,
         )
@@ -1423,7 +1429,11 @@ class UMAP(BaseEstimator):
             raise ValueError("min_dist cannot be negative")
         if not isinstance(self.init, str) and not isinstance(self.init, np.ndarray):
             raise ValueError("init must be a string or ndarray")
-        if isinstance(self.init, str) and self.init not in ("spectral", "random"):
+        if isinstance(self.init, str) and self.init not in ("spectral", 
+                                                            "spectral_scaled_adjacency",
+                                                            "spectral_normalized_Laplacian",
+                                                            "spectral_adjacency",
+                                                            "random"):
             raise ValueError('string init values must be "spectral" or "random"')
         if (
             isinstance(self.init, np.ndarray)

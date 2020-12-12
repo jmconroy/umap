@@ -267,7 +267,9 @@ def multi_component_layout(
     return result
 
 
-def spectral_layout(data, graph, dim, random_state, metric="euclidean", metric_kwds={}):
+def spectral_layout(data, graph, dim, random_state, 
+                    matrix="normalized_Laplacian", 
+                    metric="euclidean", metric_kwds={}):
     """Given a graph compute the spectral embedding of the graph. This is
     simply the eigenvectors of the laplacian of the graph. Here we use the
     normalized laplacian.
@@ -279,13 +281,17 @@ def spectral_layout(data, graph, dim, random_state, metric="euclidean", metric_k
 
     graph: sparse matrix
         The (weighted) adjacency matrix of the graph as a sparse matrix.
-
+    
     dim: int
         The dimension of the space into which to embed.
 
     random_state: numpy RandomState or equivalent
         A state capable being used as a numpy random state.
-
+        
+    matrix: str
+        The matrix to use for spectral layout
+        'normalized_Laplacian', 'scaled_adjacency', 'adjacency'
+        
     Returns
     -------
     embedding: array of shape (n_vertices, dim)
@@ -312,20 +318,21 @@ def spectral_layout(data, graph, dim, random_state, metric="euclidean", metric_k
     D = scipy.sparse.spdiags(
         1.0 / np.sqrt(diag_data), 0, graph.shape[0], graph.shape[0]
     )
-    OLD = True
-    if OLD:
+    if matrix == "normalized_Laplacian":
         #Normalized Laplacian
         I = scipy.sparse.identity(graph.shape[0], dtype=np.float64)
         L = I - D * graph * D
-    else:
+    elif matrix == "scaled_adjacency":
         # Reduced Adjacency Matrix
         A = D*graph*D
+    else:
+        A = graph
     k = dim + 1
     num_lanczos_vectors = max(2 * k + 1, int(np.sqrt(graph.shape[0])))
     import time
     t0 = time.clock()
     try:
-        if OLD:
+        if matrix == 'normalized_Laplacian':
             if L.shape[0] < 2000000:
                 eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(
                     L,
@@ -350,11 +357,8 @@ def spectral_layout(data, graph, dim, random_state, metric="euclidean", metric_k
                     v0=np.sqrt(diag_data.T),
                 )
         order = np.argsort(1.0-eigenvalues)[1:k]
-        t1 = time.clock()
-        if OLD:
-            print('ORG init time: %f'%(t1-t0))
-        else:
-            print('NEW init time: %f'%(t1-t0))
+        t1 = time.clock()        
+        print('%s init time: %f'%(matrix,t1-t0))
         return eigenvectors[:, order]
     except scipy.sparse.linalg.ArpackError:
         warn(
