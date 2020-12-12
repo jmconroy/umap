@@ -1034,7 +1034,8 @@ def simplicial_set_embedding(
         if len(matrix) == 1:
             matrix = 'normalized_Laplacian'
         else:
-            matrix = '_'.join(matrix[1:])           
+            matrix = '_'.join(matrix[1:])  
+        t0 = time.clock()
         initialisation = spectral_layout(
             data,
             graph,
@@ -1044,6 +1045,8 @@ def simplicial_set_embedding(
             metric=metric,
             metric_kwds=metric_kwds,
         )
+        t1 = time.clock()        
+        print('%s init time: %f'%(matrix,t1-t0))
         expansion = 10.0 / np.abs(initialisation).max()
         embedding = (initialisation * expansion).astype(
             np.float32

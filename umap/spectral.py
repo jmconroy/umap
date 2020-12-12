@@ -179,7 +179,6 @@ def multi_component_layout(
     embedding: array of shape (n_samples, dim)
         The initial embedding of ``graph``.
     """
-    print('USING multi_component_layout:%d components'%(n_components))
     result = np.empty((graph.shape[0], dim), dtype=np.float32)
 
     if n_components > 2 * dim:
@@ -215,34 +214,41 @@ def multi_component_layout(
             )
             continue
 
-        diag_data = np.asarray(component_graph.sum(axis=0))
-        # standard Laplacian
-        # D = scipy.sparse.spdiags(diag_data, 0, graph.shape[0], graph.shape[0])
-        # L = D - graph
-        # Normalized Laplacian
-        #I = scipy.sparse.identity(component_graph.shape[0], dtype=np.float64)
-        D = scipy.sparse.spdiags(
-            1.0 / np.sqrt(diag_data),
-            0,
-            component_graph.shape[0],
-            component_graph.shape[0],
-        )
-        #L = I - D * component_graph * D
-        # Reduced Adjacency Matrix
-        A = D*component_graph*D
-        k = dim + 1
-        num_lanczos_vectors = max(2 * k + 1, int(np.sqrt(component_graph.shape[0])))
+        # diag_data = np.asarray(component_graph.sum(axis=0))
+        # # standard Laplacian
+        # # D = scipy.sparse.spdiags(diag_data, 0, graph.shape[0], graph.shape[0])
+        # # L = D - graph
+        # # Normalized Laplacian
+        # #I = scipy.sparse.identity(component_graph.shape[0], dtype=np.float64)
+        # D = scipy.sparse.spdiags(
+        #     1.0 / np.sqrt(diag_data),
+        #     0,
+        #     component_graph.shape[0],
+        #     component_graph.shape[0],
+        # )
+        # #L = I - D * component_graph * D
+        # # Reduced Adjacency Matrix
+        # A = D*component_graph*D
+        # k = dim + 1
+        # num_lanczos_vectors = max(2 * k + 1, int(np.sqrt(component_graph.shape[0])))
+        # try:
+        #     eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(
+        #         A,
+        #         k,
+        #         which="LM",
+        #         ncv=num_lanczos_vectors,
+        #         tol=1e-4,
+        #         v0=np.sqrt(diag_data.T),
+        #     )
+        #     order = np.argsort(1.0-eigenvalues)[1:k]
+        #     component_embedding = eigenvectors[:, order]
+        #     expansion = data_range / np.max(np.abs(component_embedding))
+        #     component_embedding *= expansion
+        #     result[component_labels == label] = (
+        #         component_embedding + meta_embedding[label]
+        #     )
         try:
-            eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(
-                A,
-                k,
-                which="LM",
-                ncv=num_lanczos_vectors,
-                tol=1e-4,
-                v0=np.sqrt(diag_data.T),
-            )
-            order = np.argsort(1.0-eigenvalues)[1:k]
-            component_embedding = eigenvectors[:, order]
+            component_embedding = get_spectral_vectors(component_graph, dim, random_state)
             expansion = data_range / np.max(np.abs(component_embedding))
             component_embedding *= expansion
             result[component_labels == label] = (
@@ -297,8 +303,10 @@ def spectral_layout(data, graph, dim, random_state,
     embedding: array of shape (n_vertices, dim)
         The spectral embedding of the graph.
     """
+
     n_components, labels = scipy.sparse.csgraph.connected_components(graph)
     if n_components > 1:
+        print('USING multi_component_layout:%d components'%(n_components))
         return multi_component_layout(
             data,
             graph,
@@ -323,6 +331,26 @@ def spectral_layout(data, graph, dim, random_state,
 
 
 def get_spectral_vectors(graph,dim,random_state,matrix="normalized_Laplacian"):
+    """Given a component of a graph compute the spectral embedding of the graph. This is
+    simply the eigenvectors of the normalized Laplacian of the graph. Here we use the
+    normalized Laplacian.
+
+    Parameters
+    ----------
+
+    graph: sparse matrix
+        The (weighted) adjacency matrix of the graph as a sparse matrix.
+    
+    dim: int
+        The dimension of the space into which to embed.
+
+    random_state: numpy RandomState or equivalent
+        A state capable being used as a numpy random state.
+        
+    matrix: str
+        The matrix to use for spectral layout
+        'normalized_Laplacian', 'scaled_adjacency', 'adjacency'
+    """
     diag_data = np.asarray(graph.sum(axis=0))
     # standard Laplacian
     # D = scipy.sparse.spdiags(diag_data, 0, graph.shape[0], graph.shape[0])
@@ -341,8 +369,7 @@ def get_spectral_vectors(graph,dim,random_state,matrix="normalized_Laplacian"):
         A = graph
     k = dim + 1
     num_lanczos_vectors = max(2 * k + 1, int(np.sqrt(graph.shape[0])))
-    import time
-    t0 = time.clock()
+
     if matrix == 'normalized_Laplacian':
         if L.shape[0] < 2000000:
             eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(
@@ -368,6 +395,5 @@ def get_spectral_vectors(graph,dim,random_state,matrix="normalized_Laplacian"):
                 v0=np.sqrt(diag_data.T),
             )
     order = np.argsort(1.0-np.abs(eigenvalues))[1:k]
-    t1 = time.clock()        
-    print('%s init time: %f'%(matrix,t1-t0))
+
     return eigenvectors[:, order]

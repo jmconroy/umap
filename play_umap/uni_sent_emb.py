@@ -57,6 +57,8 @@ elif ORTHO[:3]=='pca':
     k=int(ORTHO[3:])
     pca = PCA(n_components=k, svd_solver='full')
     vectors=pca.fit_transform(vectors)
-
-for n_neighbor in n_neighbors:
-    feats,labs=run_umap_example(vectors,n_neighbors=n_neighbor,category_labels=labels)
+    
+inits =['spectral_scaled_adjacency', 'spectral_normalized_Laplacian','spectral_adjacency']
+for init in inits:
+    for n_neighbor in n_neighbors:
+        feats,labs=run_umap_example(vectors,init=init,n_neighbors=n_neighbor,category_labels=labels)

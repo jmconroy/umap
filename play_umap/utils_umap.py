@@ -18,9 +18,9 @@ from bokeh.resources import INLINE
 output_notebook(resources=INLINE)
 
 
-def run_umap_example(feature_matrix,n_components=2,n_neighbors=2,category_labels=None):
+def run_umap_example(feature_matrix,n_components=2,init="spectral",n_neighbors=2,category_labels=None):
     t0 = time.process_time()
-    feature_embedding = umap.UMAP(n_components=n_components,n_neighbors=n_neighbors).fit(feature_matrix)
+    feature_embedding = umap.UMAP(n_components=n_components,init=init,n_neighbors=n_neighbors).fit(feature_matrix)
     t1 = time.process_time()
     print('Elapsed time for umap %d embedding = %f'%(n_components,t1-t0))
     if category_labels is not None:
