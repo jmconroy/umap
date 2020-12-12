@@ -310,7 +310,19 @@ def spectral_layout(data, graph, dim, random_state,
             metric_kwds=metric_kwds,
         )
     print('USING spectral_layout')
+    try:
+        return get_spectral_vectors(graph,dim,random_state,matrix=matrix)
+    except scipy.sparse.linalg.ArpackError:
+        warn(
+            "WARNING: spectral initialisation failed! The eigenvector solver\n"
+            "failed. This is likely due to too small an eigengap. Consider\n"
+            "adding some noise or jitter to your data.\n\n"
+            "Falling back to random initialisation!"
+        )
+        return random_state.uniform(low=-10.0, high=10.0, size=(graph.shape[0], dim))
 
+
+def get_spectral_vectors(graph,dim,random_state,matrix="normalized_Laplacian"):
     diag_data = np.asarray(graph.sum(axis=0))
     # standard Laplacian
     # D = scipy.sparse.spdiags(diag_data, 0, graph.shape[0], graph.shape[0])
@@ -331,40 +343,31 @@ def spectral_layout(data, graph, dim, random_state,
     num_lanczos_vectors = max(2 * k + 1, int(np.sqrt(graph.shape[0])))
     import time
     t0 = time.clock()
-    try:
-        if matrix == 'normalized_Laplacian':
-            if L.shape[0] < 2000000:
-                eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(
-                    L,
-                    k,
-                    which="SM",
-                    ncv=num_lanczos_vectors,
-                    tol=1e-4,
-                    v0=np.ones(L.shape[0]),
-                    maxiter=graph.shape[0] * 5,
-                )
-            else:
-                eigenvalues, eigenvectors = scipy.sparse.linalg.lobpcg(
-                    L, random_state.normal(size=(L.shape[0], k)), largest=False, tol=1e-8
-                )
-        else:
+    if matrix == 'normalized_Laplacian':
+        if L.shape[0] < 2000000:
             eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(
-                    A,
-                    k,
-                    which="LM",
-                    ncv=num_lanczos_vectors,
-                    tol=1e-4,
-                    v0=np.sqrt(diag_data.T),
-                )
-        order = np.argsort(1.0-np.abs(eigenvalues))[1:k]
-        t1 = time.clock()        
-        print('%s init time: %f'%(matrix,t1-t0))
-        return eigenvectors[:, order]
-    except scipy.sparse.linalg.ArpackError:
-        warn(
-            "WARNING: spectral initialisation failed! The eigenvector solver\n"
-            "failed. This is likely due to too small an eigengap. Consider\n"
-            "adding some noise or jitter to your data.\n\n"
-            "Falling back to random initialisation!"
-        )
-        return random_state.uniform(low=-10.0, high=10.0, size=(graph.shape[0], dim))
+                L,
+                k,
+                which="SM",
+                ncv=num_lanczos_vectors,
+                tol=1e-4,
+                v0=np.ones(L.shape[0]),
+                maxiter=graph.shape[0] * 5,
+            )
+        else:
+            eigenvalues, eigenvectors = scipy.sparse.linalg.lobpcg(
+                L, random_state.normal(size=(L.shape[0], k)), largest=False, tol=1e-8
+            )
+    else:
+        eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(
+                A,
+                k,
+                which="LM",
+                ncv=num_lanczos_vectors,
+                tol=1e-4,
+                v0=np.sqrt(diag_data.T),
+            )
+    order = np.argsort(1.0-np.abs(eigenvalues))[1:k]
+    t1 = time.clock()        
+    print('%s init time: %f'%(matrix,t1-t0))
+    return eigenvectors[:, order]
